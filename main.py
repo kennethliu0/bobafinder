@@ -1,5 +1,8 @@
 import os
 import uuid
+from dotenv import load_dotenv
+
+load_dotenv()  # Load environment variables before importing agents
 
 from langchain.agents import create_agent
 from langgraph_swarm import create_handoff_tool, create_swarm
@@ -17,9 +20,16 @@ from agents.quantitative_analyst import quantitative_analyst
 
 
 MONGO_KEY = os.getenv("MONGODB_URI")
-client = MongoClient(MONGO_KEY, server_api=ServerApi('1'))
-    
-checkpointer = MongoDBSaver(client)
+if MONGO_KEY and MONGO_KEY.strip() and not MONGO_KEY.startswith("<"):
+    try:
+        client = MongoClient(MONGO_KEY, server_api=ServerApi('1'))
+        checkpointer = MongoDBSaver(client)
+    except Exception as e:
+        print(f"Warning: MongoDB connection failed ({e}), using InMemorySaver instead")
+        checkpointer = InMemorySaver()
+else:
+    print("MONGODB_URI not configured, using InMemorySaver (checkpoints won't persist)")
+    checkpointer = InMemorySaver()
 workflow = create_swarm(
     [quantitative_analyst, scout],
     default_active_agent="Location Scout"
