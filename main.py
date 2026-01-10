@@ -17,6 +17,9 @@ from tools.analysis_tools import (
     calculate_trend_metrics,
 )
 
+# Import Location Scout agent
+from agents.scout import scout
+
 
 load_dotenv()
 
@@ -45,6 +48,10 @@ alice = create_agent(
             agent_name="Quantitative Analyst",
             description="Transfer to Quantitative Analyst for competitor analysis and market research",
         ),
+        create_handoff_tool(
+            agent_name="Location Scout",
+            description="Transfer to Location Scout to identify potential locations and competitors",
+        ),
     ],
     system_prompt="You are Alice, an addition expert.",
     name="Alice",
@@ -60,6 +67,10 @@ bob = create_agent(
         create_handoff_tool(
             agent_name="Quantitative Analyst",
             description="Transfer to Quantitative Analyst for competitor analysis and market research",
+        ),
+        create_handoff_tool(
+            agent_name="Location Scout",
+            description="Transfer to Location Scout to identify potential locations and competitors",
         ),
     ],
     system_prompt="You are Bob, you speak like a pirate.",
@@ -97,7 +108,7 @@ Your expertise includes:
 - Analyzing competitor health through review trends, ratings, and review frequency
 - Checking the performance of direct competitors (boba shops) that Location Scout has identified
 - Checking the performance of complement businesses (coffee shops, dessert places, Asian restaurants) that Location Scout has identified
-- Calculating trend metrics including rating slopes, volatility, and trend directions
+- Calculating trend metrics including rating slopes, volatility, and trend directions for competitors and complement businesses
 
 When analyzing competitors provided by Location Scout:
 1. Use fetch_google_reviews and fetch_yelp_reviews to gather review data for the identified businesses
@@ -114,7 +125,7 @@ client = MongoClient(MONGO_KEY, server_api=ServerApi('1'))
     
 checkpointer = MongoDBSaver(client)
 workflow = create_swarm(
-    [alice, bob, quantitative_analyst],
+    [alice, bob, quantitative_analyst, scout],
     default_active_agent="Alice"
 )
 app = workflow.compile(checkpointer=checkpointer)
