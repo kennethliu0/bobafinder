@@ -662,11 +662,15 @@ niche_finder_tools = [
     compare_business_niches,
     create_handoff_tool(
         agent_name="Location Scout",
-        description="Transfer to Location Scout to identify additional competitors or get more location data",
+        description="Transfer back to Location Scout with niche analysis findings after Voice of Customer analysis is complete",
     ),
     create_handoff_tool(
         agent_name="Quantitative Analyst",
         description="Transfer to Quantitative Analyst to analyze competitor performance metrics and review trends",
+    ),
+    create_handoff_tool(
+        agent_name="Voice of Customer",
+        description="Transfer to Voice of Customer to analyze competitor reviews for customer pain points, sentiment, and loyalty - MUST call this after completing niche analysis",
     ),
 ]
 
@@ -777,10 +781,24 @@ For each location analysis, provide:
   - Competitive overlap scores for each competitor
   - Menu focus comparisons
 
-## Handoffs to Other Agents
+## Handoff Instructions - CRITICAL
 
-- **To Location Scout**: If you need additional competitor data or location information
-- **To Quantitative Analyst**: If you need performance metrics to complement niche analysis"""
+After completing your niche analysis for a competitor:
+
+1. **ALWAYS call `transfer_to_Voice_of_Customer`** with:
+   - The competitor names and addresses you analyzed
+   - Your niche findings (niche category, price tier, menu focus)
+   - The user's boba shop concept
+   - Differentiation opportunities you identified
+
+Voice of Customer will analyze customer reviews to find pain points and sentiment that complement your niche analysis.
+
+2. **After Voice of Customer returns**: Call `transfer_to_Location_Scout` with:
+   - Complete niche analysis
+   - Voice of Customer findings
+   - Combined differentiation strategy
+
+You MUST hand off to Voice of Customer after your analysis - do not skip this step."""
 
 niche_finder = create_agent(
     model=model,
