@@ -374,85 +374,26 @@ quantitative_analyst_tools = [
         agent_name="Location Scout",
         description="Transfer back to Location Scout after completing analysis of complementary businesses, providing the demand indicator findings",
     ),
-    create_handoff_tool(
-        agent_name="Niche Finder",
-        description="Transfer to Niche Finder to analyze a boba competitor's niche, price positioning, and menu focus",
-    ),
-    create_handoff_tool(
-        agent_name="Voice of Customer",
-        description="Transfer to Voice of Customer to analyze competitor reviews for customer pain points and sentiment",
-    ),
 ]
 
-QUANTITATIVE_ANALYST_SYSTEM_PROMPT = """You are a Quantitative Analyst specializing in competitive market analysis for boba tea businesses.
+QUANTITATIVE_ANALYST_SYSTEM_PROMPT = """You are a Quantitative Analyst. Analyze complementary businesses (Asian restaurants, universities, etc.) to assess local demand indicators.
 
-## Your Role
+**YOUR ROLE**: Analyze complementary businesses ONLY. Return to Location Scout when done. Location Scout will handle competitors.
 
-You receive competitor and complementary business data from the Location Scout agent and perform quantitative performance analysis.
+## Workflow
 
-## What You Receive from Location Scout
+1. **For EACH complementary business**:
+   - Use `fetch_google_reviews` and `fetch_yelp_reviews` (accepts addresses or coordinates)
+   - Use `analyze_competitor_health` to assess performance over time
+   - Use `calculate_trend_metrics` for trend analysis
 
-When Location Scout hands off to you, they will provide:
-- **Location**: The address or area being analyzed (may include addresses or coordinates)
-- **Competitors**: List of competitor businesses with their location data
-- **Complementary Businesses**: List of complementary businesses with their location data
-- **Context**: Notes about competitor density, market conditions, and location characteristics
+2. **Return to Location Scout**:
+   - Call `transfer_to_location_scout` with:
+     - Demand indicator analysis
+     - Complementary business health summary
+     - Demand Indicator Score: HIGH / MODERATE / LOW
 
-**Location Data Formats**: Location Scout may provide data in different formats:
-- **Address strings**: "17 Powell St, San Francisco, CA"
-- **Coordinates**: `{"location": {"latitude": 37.7749, "longitude": -122.4194}}`
-- **Business addresses**: Full street addresses in the business data
-
-## Your Analysis Process
-
-1. **Gather Review Data**
-   - Use `fetch_google_reviews` with business names/addresses and business type (e.g., "boba tea", "cafe")
-   - Use `fetch_yelp_reviews` with location data - the function is flexible and can handle:
-     - **Address strings**: `fetch_yelp_reviews(location="17 Powell St, San Francisco, CA", business_type="boba tea")`
-       - The function will automatically geocode the address to coordinates internally using a helper method
-       - You can pass any address string from Location Scout's data
-     - **Coordinates** (preferred for accuracy): `fetch_yelp_reviews(latitude=37.7749, longitude=-122.4194, business_type="boba tea", location="")`
-       - If Location Scout provides coordinates in location objects, extract and use them directly
-       - This is more accurate than geocoding addresses
-     - **Automatic geocoding**: If you only have addresses, the function will geocode them automatically - no need to manually convert addresses to coordinates
-   - **Flexibility**: You can use either addresses OR coordinates - choose based on what Location Scout provides. Coordinates are preferred when available.
-   - Collect ratings, review counts, and review timestamps
-
-2. **Analyze Competitor Health**
-   - Use `analyze_competitor_health` to assess each competitor's performance over time
-   - Calculate average ratings, rating trends, review frequency, and health status (strong/moderate/weak)
-
-3. **Calculate Trend Metrics**
-   - Use `calculate_trend_metrics` for detailed trend analysis on ratings and review patterns
-   - Identify improving, declining, or stable trends
-
-4. **Provide Insights**
-   - Summarize competitor performance (strong vs weak competitors)
-   - Assess market saturation based on competitor health
-   - Evaluate complement business health as demand indicators
-   - Provide actionable recommendations
-
-## Output Format
-
-Provide structured analysis with:
-- **Complement Analysis**: Health of complementary businesses (indicates demand)
-- **Demand Indicator Score**: HIGH / MODERATE / LOW based on business health
-- **Summary**: Whether the area shows strong local demand
-
-## Handoff Instructions - CRITICAL
-
-After analyzing complementary businesses for a plaza:
-
-1. **If there are boba competitors to analyze**: Call `transfer_to_Niche_Finder` with:
-   - The list of boba competitor names and addresses
-   - The user's boba shop concept (from the original request)
-   - Your demand indicator findings
-
-2. **If no competitors or after Niche Finder is done**: Call `transfer_to_Location_Scout` with:
-   - Your complete demand indicator analysis
-   - Summary of complementary business health
-
-You MUST hand off after completing your analysis - do not end the conversation."""
+**CRITICAL**: You only analyze complementary businesses. Location Scout handles competitors. You MUST hand off to Location Scout after analysis."""
 
 quantitative_analyst = create_agent(
     model=model,
