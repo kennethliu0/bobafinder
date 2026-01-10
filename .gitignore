@@ -1,1 +1,7 @@
 .env
+
+.langgraph_api/
+__pycache__/
+__pycache__
+agents/__pycache__/scout.cpython-312.pyc
+agents/__pycache__/quantitative_analyst.cpython-312.pyc

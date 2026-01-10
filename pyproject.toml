@@ -6,10 +6,19 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "dotenv>=0.9.9",
+    "googlemaps>=4.10.0",
     "langchain>=1.2.3",
     "langchain-fireworks>=1.1.0",
+    "langgraph>=1.0.5",
+    "langgraph-api>=0.6.30",
     "langgraph-checkpoint-mongodb>=0.3.0",
+    "langgraph-cli>=0.4.11",
     "langgraph-swarm>=0.1.0",
-    "pymongo>=4.15.5",
+    "numpy>=1.24.0",
+    "pandas>=2.0.0",
     "python-dotenv>=1.2.1",
+    "yelpapi>=2.0.0",
+    "python-dotenv>=1.2.1",
+    "yelpapi>=2.0.0",
+    "uvicorn>=0.40.0",
 ]

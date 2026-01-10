@@ -1,0 +1,323 @@
+import os
+from typing import List, Dict, Any
+from datetime import datetime
+
+from langchain_core.tools import tool
+from langchain.agents import create_agent
+from langgraph_swarm import create_handoff_tool
+import googlemaps
+from yelpapi import YelpAPI
+import numpy as np
+
+from config import model
+
+
+@tool
+def fetch_google_reviews(location: str, business_type: str, time_range: str) -> List[Dict[str, Any]]:
+    """
+    Fetch Google Places reviews with ratings and timestamps.
+    
+    Args:
+        location: Address or place name to search
+        business_type: Type of business (e.g., "boba tea", "bubble tea")
+        time_range: Time range for reviews (e.g., "30d", "90d", "1y")
+    
+    Returns:
+        List of dictionaries containing business name, ratings, review counts, and timestamps
+    """
+    api_key = os.getenv("GOOGLE_PLACES_API_KEY")
+    if not api_key:
+        return [{"error": "GOOGLE_PLACES_API_KEY not set"}]
+    
+    gmaps = googlemaps.Client(key=api_key)
+    
+    # Search for places
+    places_result = gmaps.places(query=f"{business_type} near {location}")
+    
+    results = []
+    for place in places_result.get("results", [])[:10]:  # Limit to top 10 results
+        place_id = place.get("place_id")
+        if not place_id:
+            continue
+        
+        # Get place details including reviews
+        place_details = gmaps.place(place_id=place_id, fields=["name", "rating", "user_ratings_total", "reviews"])
+        
+        business_data = {
+            "business_name": place_details.get("result", {}).get("name"),
+            "rating": place_details.get("result", {}).get("rating"),
+            "review_count": place_details.get("result", {}).get("user_ratings_total", 0),
+            "reviews": []
+        }
+        
+        # Get all reviews (time_range parameter kept for API compatibility but not used for filtering)
+        for review in place_details.get("result", {}).get("reviews", []):
+            review_time = datetime.fromtimestamp(review.get("time", 0))
+            business_data["reviews"].append({
+                "rating": review.get("rating"),
+                "text": review.get("text", ""),
+                "timestamp": review_time.isoformat(),
+                "time": review.get("time", 0)
+            })
+        
+        results.append(business_data)
+    
+    return results
+
+
+@tool
+def fetch_yelp_reviews(location: str, business_type: str, time_range: str) -> List[Dict[str, Any]]:
+    """
+    Fetch Yelp reviews with ratings and timestamps.
+    
+    Args:
+        location: Address or place name to search
+        business_type: Type of business (e.g., "boba tea", "bubble tea")
+        time_range: Time range for reviews (e.g., "30d", "90d", "1y")
+    
+    Returns:
+        List of dictionaries containing business name, ratings, review counts, and timestamps
+    """
+    api_key = os.getenv("YELP_API_KEY")
+    if not api_key:
+        return [{"error": "YELP_API_KEY not set"}]
+    
+    yelp_api = YelpAPI(api_key)
+    
+    try:
+        search_results = yelp_api.search_query(
+            term=business_type,
+            location=location,
+            limit=10
+        )
+        
+        results = []
+        
+        for business in search_results.get("businesses", []):
+            business_id = business.get("id")
+            if not business_id:
+                continue
+            
+            # Get business details and reviews
+            business_details = yelp_api.business_query(id=business_id)
+            
+            business_data = {
+                "business_name": business_details.get("name"),
+                "rating": business_details.get("rating"),
+                "review_count": business_details.get("review_count", 0),
+                "reviews": []
+            }
+            
+            # Yelp API doesn't provide reviews in search results, so we'll use the rating and count
+            # For full review text, would need Yelp Fusion API with reviews endpoint (if available)
+            business_data["reviews"] = [{
+                "rating": business.get("rating"),
+                "timestamp": datetime.now().isoformat(),  # Placeholder - Yelp API limitations
+            }]
+            
+            results.append(business_data)
+    
+    except Exception as e:
+        return [{"error": f"Yelp API error: {str(e)}"}]
+    
+    return results
+
+
+@tool
+def analyze_competitor_health(business_data: List[Dict[str, Any]], time_period: str) -> Dict[str, Any]:
+    """
+    Calculate trends in ratings and review frequency over time.
+    
+    Args:
+        business_data: List of business dictionaries with reviews
+        time_period: Time period for analysis (e.g., "30d", "90d", "1y")
+    
+    Returns:
+        Dictionary with health metrics including trend direction, volatility, and performance indicators
+    """
+    if not business_data:
+        return {"error": "No business data provided"}
+    
+    results = []
+    
+    for business in business_data:
+        if "error" in business:
+            continue
+        
+        reviews = business.get("reviews", [])
+        if not reviews:
+            continue
+        
+        # Extract ratings and timestamps
+        ratings = [r.get("rating", 0) for r in reviews]
+        timestamps = [r.get("timestamp") for r in reviews if r.get("timestamp")]
+        
+        if len(ratings) < 2:
+            continue
+        
+        # Calculate trend metrics
+        trend_metrics = calculate_trend_metrics(ratings, timestamps)
+        
+        # Calculate review frequency (simplified - assume time_period represents days)
+        try:
+            days = float(time_period.rstrip('dwmy')) if time_period[-1] in 'dwmy' else 90.0
+            if time_period.endswith('w'):
+                days *= 7
+            elif time_period.endswith('m'):
+                days *= 30
+            elif time_period.endswith('y'):
+                days *= 365
+            review_frequency = len(reviews) / days * 30  # Reviews per month
+        except:
+            review_frequency = len(reviews) / 90.0 * 30  # Default to 90 days
+        
+        # Determine health status
+        avg_rating = np.mean(ratings)
+        rating_trend = trend_metrics.get("slope", 0)
+        
+        if avg_rating >= 4.5 and rating_trend >= 0:
+            health_status = "strong"
+        elif avg_rating >= 4.0 and rating_trend >= -0.1:
+            health_status = "moderate"
+        else:
+            health_status = "weak"
+        
+        results.append({
+            "business_name": business.get("business_name"),
+            "average_rating": float(avg_rating),
+            "rating_trend": float(rating_trend),
+            "volatility": trend_metrics.get("volatility", 0),
+            "review_frequency_per_month": float(review_frequency),
+            "total_reviews": len(reviews),
+            "health_status": health_status,
+            "trend_direction": trend_metrics.get("trend_direction", "stable")
+        })
+    
+    return {
+        "competitors_analyzed": len(results),
+        "analysis": results,
+        "summary": {
+            "strong_performers": len([r for r in results if r["health_status"] == "strong"]),
+            "moderate_performers": len([r for r in results if r["health_status"] == "moderate"]),
+            "weak_performers": len([r for r in results if r["health_status"] == "weak"])
+        }
+    }
+
+
+@tool
+def calculate_trend_metrics(ratings: List[float], timestamps: List[str]) -> Dict[str, Any]:
+    """
+    Compute slope, volatility, and trend direction from ratings over time.
+    
+    Args:
+        ratings: List of rating values
+        timestamps: List of ISO format timestamp strings
+    
+    Returns:
+        Dictionary with slope, volatility, and trend_direction
+    """
+    if len(ratings) < 2:
+        return {
+            "slope": 0.0,
+            "volatility": 0.0,
+            "trend_direction": "insufficient_data"
+        }
+    
+    # Convert timestamps to numeric values (days since first review)
+    try:
+        parsed_times = [datetime.fromisoformat(ts.replace('Z', '+00:00')) for ts in timestamps]
+        first_time = min(parsed_times)
+        time_deltas = [(t - first_time).days for t in parsed_times]
+    except Exception:
+        # Fallback to sequential indices if timestamp parsing fails
+        time_deltas = list(range(len(ratings)))
+    
+    # Calculate linear regression slope
+    if len(set(time_deltas)) > 1:
+        slope = np.polyfit(time_deltas, ratings, 1)[0]
+    else:
+        slope = 0.0
+    
+    # Calculate volatility (standard deviation)
+    volatility = float(np.std(ratings))
+    
+    # Determine trend direction
+    if slope > 0.01:
+        trend_direction = "improving"
+    elif slope < -0.01:
+        trend_direction = "declining"
+    else:
+        trend_direction = "stable"
+    
+    return {
+        "slope": float(slope),
+        "volatility": volatility,
+        "trend_direction": trend_direction
+    }
+
+
+quantitative_analyst_tools = [
+    fetch_google_reviews,
+    fetch_yelp_reviews,
+    analyze_competitor_health,
+    calculate_trend_metrics,
+    create_handoff_tool(
+        agent_name="Location Scout",
+        description="Transfer back to Location Scout to identify additional competitors or complementary businesses in a different location or expanded search area",
+    ),
+]
+
+QUANTITATIVE_ANALYST_SYSTEM_PROMPT = """You are a Quantitative Analyst specializing in competitive market analysis for boba tea businesses.
+
+## Your Role
+
+You receive competitor and complementary business data from the Location Scout agent and perform quantitative performance analysis.
+
+## What You Receive from Location Scout
+
+When Location Scout hands off to you, they will provide:
+- **Location**: The address or area being analyzed
+- **Competitors**: List of competitor business names and addresses (boba shops, cafes, tea houses)
+- **Complementary Businesses**: List of complementary business names and addresses (Asian restaurants, study areas, etc.)
+- **Context**: Notes about competitor density, market conditions, and location characteristics
+
+## Your Analysis Process
+
+1. **Gather Review Data**
+   - Use `fetch_google_reviews` with business names/addresses and business type (e.g., "boba tea", "cafe")
+   - Use `fetch_yelp_reviews` for additional review data
+   - Collect ratings, review counts, and review timestamps
+
+2. **Analyze Competitor Health**
+   - Use `analyze_competitor_health` to assess each competitor's performance over time
+   - Calculate average ratings, rating trends, review frequency, and health status (strong/moderate/weak)
+
+3. **Calculate Trend Metrics**
+   - Use `calculate_trend_metrics` for detailed trend analysis on ratings and review patterns
+   - Identify improving, declining, or stable trends
+
+4. **Provide Insights**
+   - Summarize competitor performance (strong vs weak competitors)
+   - Assess market saturation based on competitor health
+   - Evaluate complement business health as demand indicators
+   - Provide actionable recommendations
+
+## Output Format
+
+Provide structured analysis with:
+- **Competitor Analysis**: Health status, ratings, trends for each competitor
+- **Market Assessment**: Overall competitor strength, market saturation level
+- **Complement Analysis**: Health of complementary businesses (indicates demand)
+- **Recommendations**: Data-driven insights about market viability
+- **Risk Factors**: Weak competitors (opportunity) vs strong competitors (challenge)
+
+## Handoff Back to Location Scout
+
+If you need additional competitor or complement data for a different location or expanded search area, hand off back to Location Scout with specific requests."""
+
+quantitative_analyst = create_agent(
+    model=model,
+    tools=quantitative_analyst_tools,
+    system_prompt=QUANTITATIVE_ANALYST_SYSTEM_PROMPT,
+    name="Quantitative Analyst"
+)
