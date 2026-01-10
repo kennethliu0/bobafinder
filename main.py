@@ -1,3 +1,4 @@
+import os
 from dotenv import load_dotenv
 
 from langchain_fireworks import ChatFireworks
@@ -5,9 +6,13 @@ from langchain.agents import create_agent
 from langgraph_swarm import create_handoff_tool, create_swarm
 from langgraph.checkpoint.memory import InMemorySaver
 
+from langgraph.checkpoint.mongodb import MongoDBSaver
+from pymongo.mongo_client import MongoClient
+from pymongo.server_api import ServerApi
 
 
 load_dotenv()
+
 
 model = ChatFireworks(
     model="accounts/fireworks/models/minimax-m2p1", 
@@ -45,8 +50,10 @@ bob = create_agent(
     system_prompt="You are Bob, you speak like a pirate.",
     name="Bob",
 )
-
-checkpointer = InMemorySaver()
+MONGO_KEY = os.getenv("MONGODB_URI")
+client = MongoClient(MONGO_KEY, server_api=ServerApi('1'))
+    
+checkpointer = MongoDBSaver(client)
 workflow = create_swarm(
     [alice, bob],
     default_active_agent="Alice"

@@ -10,6 +10,6 @@ dependencies = [
     "langchain-fireworks>=1.1.0",
     "langgraph-checkpoint-mongodb>=0.3.0",
     "langgraph-swarm>=0.1.0",
-    "pymongo>=4.15.5",
+    "pymongo[srv]>=4.15.5",
     "python-dotenv>=1.2.1",
 ]
