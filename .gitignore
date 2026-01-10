@@ -5,3 +5,4 @@ __pycache__/
 __pycache__
 agents/__pycache__/scout.cpython-312.pyc
 agents/__pycache__/quantitative_analyst.cpython-312.pyc
+__pycache__/main.cpython-312.pyc

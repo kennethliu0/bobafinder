@@ -1,4 +1,5 @@
 import os
+import uuid
 
 from langchain.agents import create_agent
 from langgraph_swarm import create_handoff_tool, create_swarm
@@ -25,7 +26,7 @@ workflow = create_swarm(
 )
 app = workflow.compile(checkpointer=checkpointer)
 
-config = {"configurable": {"thread_id": "2"}}
+config = {"configurable": {"thread_id": str(uuid.uuid4())}}
 turn_1 = app.invoke({
     "messages": [{"role": "user", "content": "I want to create a boba shop in downtwon San Fransisco"}],
 }, config)
