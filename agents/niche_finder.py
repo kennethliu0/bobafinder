@@ -662,15 +662,7 @@ niche_finder_tools = [
     compare_business_niches,
     create_handoff_tool(
         agent_name="Location Scout",
-        description="Transfer back to Location Scout with niche analysis findings after Voice of Customer analysis is complete",
-    ),
-    create_handoff_tool(
-        agent_name="Quantitative Analyst",
-        description="Transfer to Quantitative Analyst to analyze competitor performance metrics and review trends",
-    ),
-    create_handoff_tool(
-        agent_name="Voice of Customer",
-        description="Transfer to Voice of Customer to analyze competitor reviews for customer pain points, sentiment, and loyalty - MUST call this after completing niche analysis",
+        description="Transfer back to Location Scout with niche analysis findings after completing analysis",
     ),
 ]
 
@@ -783,22 +775,16 @@ For each location analysis, provide:
 
 ## Handoff Instructions - CRITICAL
 
-After completing your niche analysis for a competitor:
+After completing your niche analysis:
 
-1. **ALWAYS call `transfer_to_Voice_of_Customer`** with:
-   - The competitor names and addresses you analyzed
-   - Your niche findings (niche category, price tier, menu focus)
-   - The user's boba shop concept
-   - Differentiation opportunities you identified
+Call `transfer_to_location_scout` with your complete findings:
+- Niche category for each competitor (premium/casual/quick-service)
+- Price tier distribution (luxury/mid-range/budget)
+- Menu focus analysis (fruit-focused/milk-tea-focused/specialty/general)
+- Market saturation level
+- Differentiation opportunities for the user's boba concept
 
-Voice of Customer will analyze customer reviews to find pain points and sentiment that complement your niche analysis.
-
-2. **After Voice of Customer returns**: Call `transfer_to_Location_Scout` with:
-   - Complete niche analysis
-   - Voice of Customer findings
-   - Combined differentiation strategy
-
-You MUST hand off to Voice of Customer after your analysis - do not skip this step."""
+You MUST transfer back to Location Scout after completing your analysis."""
 
 niche_finder = create_agent(
     model=model,

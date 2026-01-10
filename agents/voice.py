@@ -397,15 +397,7 @@ voice_tools = [
     analyze_competitor_reviews,
     create_handoff_tool(
         agent_name="Location Scout",
-        description="Transfer back to Location Scout with customer voice findings (pain points, sentiment, loyalty) to compile the final plaza analysis",
-    ),
-    create_handoff_tool(
-        agent_name="Niche Finder",
-        description="Transfer to Niche Finder if additional niche analysis is needed for competitors",
-    ),
-    create_handoff_tool(
-        agent_name="Quantitative Analyst",
-        description="Transfer to Quantitative Analyst to analyze competitor performance metrics and review trends",
+        description="Transfer back to Location Scout with customer voice findings after completing analysis",
     ),
 ]
 
@@ -457,15 +449,13 @@ for boba tea shops. Your expertise includes:
 
 After completing your analysis of competitor reviews:
 
-**ALWAYS call `transfer_to_Location_Scout`** with:
-- Your complete sentiment analysis findings
-- Key pain points discovered (what customers wish for)
-- Loyalty score and business model recommendation
-- Opportunities for the user's boba shop to differentiate
+Call `transfer_to_location_scout` with your complete findings:
+- Sentiment clusters (Wait Time, Sweetness, Pearl Texture, Staff Friendliness)
+- Key pain points discovered ("I wish...", "They don't have...")
+- Loyalty scores and business model recommendation (Regulars vs Tourist focused)
+- Total reviews analyzed and statistics
 
-Location Scout will compile your findings with the niche analysis to create the final plaza assessment.
-
-You MUST hand off after completing your analysis - do not end the conversation."""
+You MUST transfer back to Location Scout after completing your analysis."""
 
 voice = create_agent(
     model=model,

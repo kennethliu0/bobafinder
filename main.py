@@ -14,12 +14,13 @@ from agents.scout import scout
 from agents.quantitative_analyst import quantitative_analyst
 from agents.niche_finder import niche_finder
 from agents.voice import voice
+from agents.reporter import reporter
 
 MONGO_KEY = os.getenv("MONGODB_URI")
 client = MongoClient(MONGO_KEY, server_api=ServerApi('1'))
-checkpointer = MongoDBSaver(client)
+# checkpointer = MongoDBSaver(client)
 workflow = create_swarm(
-    [quantitative_analyst, scout, niche_finder, voice],
+    [quantitative_analyst, scout, niche_finder, voice, reporter],
     default_active_agent="Location Scout"
 )
-app = workflow.compile(checkpointer=checkpointer)
+app = workflow.compile()

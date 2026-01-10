@@ -188,95 +188,96 @@ scout_tools = [
     find_shopping_centers,
     create_handoff_tool(
         agent_name="Quantitative Analyst",
-        description="Transfer to Quantitative Analyst to analyze how a complementary business (Asian restaurant, university area business, etc.) is performing recently based on review trends and ratings",
+        description="Transfer to Quantitative Analyst to analyze how complementary businesses are performing based on review trends and ratings",
     ),
     create_handoff_tool(
         agent_name="Niche Finder",
-        description="Transfer to Niche Finder to analyze a direct boba competitor's niche, price positioning, and menu focus to identify differentiation opportunities for the user's boba shop",
+        description="Transfer to Niche Finder to analyze boba competitors' niches, price positioning, and menu focus",
     ),
     create_handoff_tool(
         agent_name="Voice of Customer",
-        description="Transfer to Voice of Customer to analyze reviews of a direct boba competitor to understand customer pain points, sentiment, and loyalty patterns for differentiation insights",
+        description="Transfer to Voice of Customer to analyze competitor reviews for pain points and sentiment",
+    ),
+    create_handoff_tool(
+        agent_name="Reporter",
+        description="Transfer to Reporter with ALL accumulated data to generate the final statistics-driven summary report",
     ),
 ]
 
-SCOUT_SYSTEM_PROMPT = """You are a Location Scout Agent specialized in analyzing specific plazas and shopping centers as potential sites for new boba tea shops.
+SCOUT_SYSTEM_PROMPT = """You are a Location Scout Agent that coordinates the boba shop location analysis workflow.
 
 ## Your Primary Objective
 
-Given a region (city, neighborhood, or area), identify plazas/shopping centers and gather data on nearby businesses. You will then hand off to specialized agents for deeper analysis.
+Discover plazas, gather business data, coordinate with specialist agents, and pass ALL accumulated data to the Reporter for final summary.
 
-**IMPORTANT**: Always remember the user's boba shop concept when gathering data. The user will describe what kind of boba shop they're opening (premium, casual, specific menu focus, etc.).
+**Remember the user's boba shop concept** - they will describe what kind of shop they're opening (premium, casual, menu focus, etc.).
 
 ## Workflow
 
-### Step 1: Discover Plazas in the Region
-Use `find_shopping_centers` to identify shopping centers, plazas, and retail complexes in the specified region. Select 4-5 target plazas.
+### Step 1: Discover Plazas
+Use `find_shopping_centers` to identify 4-5 plazas in the specified region.
 
-### Step 2: For EACH Plaza, Gather Business Data
+### Step 2: For Each Plaza, Gather Data
+For each plaza, use its coordinates to:
+1. `find_complementary_businesses` - Asian restaurants, salons, universities, etc.
+2. `find_boba_competitors` - boba shops, cafes, tea houses
 
-For each plaza discovered, use its coordinates to:
+### Step 3: Transfer to Specialist Agents
 
-1. **Find Complementary Businesses** (within 500-800m)
-   - Use `find_complementary_businesses` centered on the plaza's location
-   - Document: Asian restaurants, beauty salons, arcades, universities, libraries
+After gathering plaza data, transfer to each specialist agent in sequence:
 
-2. **Find Direct Competitors** (within 500-800m)
-   - Use `find_boba_competitors` centered on the plaza's location
-   - Document: boba shops, bubble tea stores, cafes, coffee shops, tea houses
+**A) `transfer_to_quantitative_analyst`**
+Include in your message:
+- All complementary business names and addresses
+- Plaza locations and coordinates
+- Request: Analyze health/performance of these businesses
 
-### Step 3: Hand Off for Deep Analysis
+**B) `transfer_to_niche_finder`**
+Include in your message:
+- All boba competitor names and addresses
+- The user's boba shop concept
+- Request: Analyze niches, pricing, menu focus of competitors
 
-After gathering data for a plaza, you MUST use the handoff tools to get deeper analysis:
+**C) `transfer_to_voice_of_customer`**
+Include in your message:
+- All boba competitor names and addresses
+- Request: Analyze reviews for pain points, sentiment, loyalty
 
-**A) For complementary businesses - Call `transfer_to_Quantitative_Analyst`:**
-Pass the list of complementary business names and the plaza location. The Quantitative Analyst will analyze:
-- Rating trends and review frequency for each business
-- Whether businesses are thriving (indicates strong local demand) or struggling
+### Step 4: Transfer to Reporter
 
-**B) For each direct boba competitor - Call `transfer_to_Niche_Finder`:**
-Pass the competitor name, address, and the user's boba shop concept. The Niche Finder will analyze:
-- Competitor's niche (premium, casual, quick-service)
-- Price positioning and menu focus
-- Differentiation opportunities for the user's shop
+After ALL specialist agents have provided their analysis, call `transfer_to_reporter` with ALL accumulated data:
 
-**C) For each direct boba competitor - Also call `transfer_to_Voice_of_Customer`:**
-Pass the competitor name and address. Voice of Customer will analyze:
-- Customer pain points from reviews ("I wish...", "They don't have...")
-- Sentiment patterns and loyalty scores
-- Gaps the user's shop could fill
-
-### Step 4: Compile Results
-
-After receiving analysis from other agents, compile a plaza profile:
-
+Include in your message to Reporter:
 ```
-## [Plaza Name]
-**Address:** [Full address]
-**Coordinates:** [lat, lng]
+USER'S BOBA CONCEPT: [What kind of shop they want to open]
 
-### Demand Indicators (from Quantitative Analyst)
-[Summary of complementary business health]
+PLAZAS DISCOVERED:
+[List all plazas with addresses and coordinates]
 
-### Competitor Analysis
-For each competitor, include findings from Niche Finder and Voice of Customer.
+COMPLEMENTARY BUSINESSES:
+[List all businesses found per plaza]
 
-### Differentiation Strategy
-Based on analysis, how can the user's boba shop differentiate here?
+BOBA COMPETITORS:
+[List all competitors found per plaza]
 
-### Overall Assessment
-**Location Potential:** HIGH / MODERATE / LOW
-**Fit for User's Concept:** EXCELLENT / GOOD / FAIR / POOR
+QUANTITATIVE ANALYST FINDINGS:
+[All health/performance data received]
+
+NICHE FINDER FINDINGS:
+[All niche/pricing/menu analysis received]
+
+VOICE OF CUSTOMER FINDINGS:
+[All pain points, sentiment, loyalty data received]
 ```
 
-## CRITICAL: You Must Use Handoff Tools
+## CRITICAL RULES
 
-Do NOT try to analyze businesses yourself. After gathering the list of businesses for a plaza:
-1. Call `transfer_to_Quantitative_Analyst` with the complementary businesses
-2. Call `transfer_to_Niche_Finder` for each boba competitor
-3. Call `transfer_to_Voice_of_Customer` for each boba competitor
+1. DO NOT generate the final report yourself - that's the Reporter's job
+2. DO NOT skip any specialist agent - you need data from ALL of them
+3. DO transfer to Reporter at the end with ALL accumulated data
+4. Each transfer should include all relevant context and data gathered so far
 
-The other agents will return to you with their findings. Then compile the final report."""
+The Reporter will compile everything into a statistics-driven summary report."""
 
 scout = create_agent(
     model=model,

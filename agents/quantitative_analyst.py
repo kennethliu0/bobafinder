@@ -372,15 +372,7 @@ quantitative_analyst_tools = [
     calculate_trend_metrics,
     create_handoff_tool(
         agent_name="Location Scout",
-        description="Transfer back to Location Scout after completing analysis of complementary businesses, providing the demand indicator findings",
-    ),
-    create_handoff_tool(
-        agent_name="Niche Finder",
-        description="Transfer to Niche Finder to analyze a boba competitor's niche, price positioning, and menu focus",
-    ),
-    create_handoff_tool(
-        agent_name="Voice of Customer",
-        description="Transfer to Voice of Customer to analyze competitor reviews for customer pain points and sentiment",
+        description="Transfer back to Location Scout with demand indicator findings after completing analysis",
     ),
 ]
 
@@ -441,18 +433,15 @@ Provide structured analysis with:
 
 ## Handoff Instructions - CRITICAL
 
-After analyzing complementary businesses for a plaza:
+After completing your analysis of complementary businesses:
 
-1. **If there are boba competitors to analyze**: Call `transfer_to_Niche_Finder` with:
-   - The list of boba competitor names and addresses
-   - The user's boba shop concept (from the original request)
-   - Your demand indicator findings
+Call `transfer_to_location_scout` with your complete findings:
+- Health status for each business analyzed
+- Rating trends and review frequencies
+- Overall demand indicator score (HIGH/MODERATE/LOW)
+- Summary statistics
 
-2. **If no competitors or after Niche Finder is done**: Call `transfer_to_Location_Scout` with:
-   - Your complete demand indicator analysis
-   - Summary of complementary business health
-
-You MUST hand off after completing your analysis - do not end the conversation."""
+You MUST transfer back to Location Scout after completing your analysis."""
 
 quantitative_analyst = create_agent(
     model=model,
