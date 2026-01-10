@@ -1,78 +1,16 @@
-"""
-Voice of Customer Agent - NLP on reviews, sentiment clustering, pain point extraction, and brand loyalty scoring.
-"""
-
 import os
-import json
 import re
-from typing import List, Dict, Any, Optional
-from dataclasses import dataclass
-from datetime import datetime
+from typing import List, Dict, Any
 
-import requests
-from bs4 import BeautifulSoup
 import googlemaps
-from langchain_fireworks import ChatFireworks
+from langchain_core.tools import tool
 from langchain.agents import create_agent
-from langgraph_swarm import create_handoff_tool, create_swarm
-from dotenv import load_dotenv
+from langgraph_swarm import create_handoff_tool
 
-load_dotenv()
-
-# Initialize model
-model = ChatFireworks(
-    model="accounts/fireworks/models/minimax-m2p1",
-    temperature=0,
-    max_tokens=None,
-    timeout=None,
-    max_retries=2,
-)
-
-# Initialize Google Maps client if API key is available
-GOOGLE_PLACES_API_KEY = os.getenv("GOOGLE_PLACES_API_KEY")
-gmaps_client = googlemaps.Client(key=GOOGLE_PLACES_API_KEY) if GOOGLE_PLACES_API_KEY else None
+from config import model
 
 
-@dataclass
-class Review:
-    """Represents a single review."""
-    text: str
-    author: str
-    rating: int
-    date: Optional[str] = None
-    is_local_guide: bool = False
-
-
-@dataclass
-class SentimentCluster:
-    """Represents a sentiment cluster for a specific category."""
-    category: str
-    positive_count: int
-    negative_count: int
-    neutral_count: int
-    sample_reviews: List[str]
-
-
-@dataclass
-class PainPoint:
-    """Represents an extracted pain point."""
-    text: str
-    category: Optional[str] = None
-    review_source: Optional[str] = None
-
-
-@dataclass
-class BrandLoyaltyScore:
-    """Represents brand loyalty metrics."""
-    total_reviews: int
-    local_guide_count: int
-    one_time_tourist_count: int
-    local_guide_percentage: float
-    supports_regulars_model: bool
-    score: float  # 0-100
-
-
-def scrape_google_reviews(place_name: str, location: str = "", max_reviews: int = 50) -> List[Review]:
+def _scrape_google_reviews(place_name: str, location: str = "", max_reviews: int = 50) -> List[Dict[str, Any]]:
     """
     Scrape Google reviews for a given place.
     
@@ -82,72 +20,55 @@ def scrape_google_reviews(place_name: str, location: str = "", max_reviews: int 
         max_reviews: Maximum number of reviews to scrape
     
     Returns:
-        List of Review objects
+        List of review dictionaries
     """
     reviews = []
+    api_key = os.getenv("GOOGLE_PLACES_API_KEY")
     
-    # If Google Maps API is available, use it
-    if gmaps_client:
-        try:
-            # Search for the place
-            places_result = gmaps_client.places(query=f"{place_name} {location}")
-            
-            if places_result.get("results"):
-                place_id = places_result["results"][0]["place_id"]
-                
-                # Get place details with reviews
-                place_details = gmaps_client.place(
-                    place_id=place_id,
-                    fields=["reviews", "name", "rating"]
-                )
-                
-                if "reviews" in place_details.get("result", {}):
-                    for review_data in place_details["result"]["reviews"][:max_reviews]:
-                        review = Review(
-                            text=review_data.get("text", ""),
-                            author=review_data.get("author_name", "Anonymous"),
-                            rating=review_data.get("rating", 0),
-                            date=review_data.get("time", 0),
-                            is_local_guide="Local Guide" in review_data.get("author_name", "").lower()
-                        )
-                        reviews.append(review)
-        except Exception as e:
-            print(f"Error using Google Maps API: {e}")
+    if not api_key:
+        return reviews
     
-    # Fallback: Use web scraping (limited functionality)
-    if not reviews:
-        try:
-            # This is a simplified scraper - in production, you'd want more sophisticated scraping
-            search_query = f"{place_name} {location} google reviews"
-            url = f"https://www.google.com/search?q={search_query.replace(' ', '+')}"
+    try:
+        gmaps = googlemaps.Client(key=api_key)
+        # Search for the place
+        places_result = gmaps.places(query=f"{place_name} {location}")
+        
+        if places_result.get("results"):
+            place_id = places_result["results"][0]["place_id"]
             
-            headers = {
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-            }
+            # Get place details with reviews
+            place_details = gmaps.place(
+                place_id=place_id,
+                fields=["reviews", "name", "rating"]
+            )
             
-            response = requests.get(url, headers=headers, timeout=10)
-            if response.status_code == 200:
-                soup = BeautifulSoup(response.content, "html.parser")
-                # Note: Google's HTML structure changes frequently, so this is a basic implementation
-                # In production, use the Places API or a dedicated scraping service
-                pass
-        except Exception as e:
-            print(f"Error scraping reviews: {e}")
+            if "reviews" in place_details.get("result", {}):
+                for review_data in place_details["result"]["reviews"][:max_reviews]:
+                    author_name = review_data.get("author_name", "Anonymous")
+                    reviews.append({
+                        "text": review_data.get("text", ""),
+                        "author": author_name,
+                        "rating": review_data.get("rating", 0),
+                        "date": str(review_data.get("time", 0)),
+                        "is_local_guide": "Local Guide" in author_name.lower()
+                    })
+    except Exception as e:
+        return [{"text": f"Error: {str(e)}", "author": "System", "rating": 0, "is_local_guide": False}]
     
     return reviews
 
 
-def cluster_reviews_by_sentiment(reviews: List[Review]) -> Dict[str, SentimentCluster]:
+def _cluster_reviews_by_sentiment(reviews: List[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
     """
     Cluster reviews into categories with sentiment analysis.
     
     Categories: Wait Time, Sweetness Levels, Pearl Texture, Staff Friendliness
     
     Args:
-        reviews: List of Review objects
+        reviews: List of review dictionaries
     
     Returns:
-        Dictionary mapping category names to SentimentCluster objects
+        Dictionary mapping category names to sentiment cluster dictionaries
     """
     categories = {
         "Wait Time": [],
@@ -166,7 +87,7 @@ def cluster_reviews_by_sentiment(reviews: List[Review]) -> Dict[str, SentimentCl
     
     # Classify reviews into categories
     for review in reviews:
-        review_lower = review.text.lower()
+        review_lower = review.get("text", "").lower()
         for category, keywords in category_keywords.items():
             if any(keyword in review_lower for keyword in keywords):
                 categories[category].append(review)
@@ -180,34 +101,35 @@ def cluster_reviews_by_sentiment(reviews: List[Review]) -> Dict[str, SentimentCl
         sample_texts = []
         
         for review in category_reviews[:5]:  # Sample first 5
-            sample_texts.append(review.text[:200])
-            if review.rating >= 4:
+            sample_texts.append(review.get("text", "")[:200])
+            rating = review.get("rating", 0)
+            if rating >= 4:
                 positive += 1
-            elif review.rating <= 2:
+            elif rating <= 2:
                 negative += 1
             else:
                 neutral += 1
         
-        clusters[category] = SentimentCluster(
-            category=category,
-            positive_count=positive,
-            negative_count=negative,
-            neutral_count=neutral,
-            sample_reviews=sample_texts
-        )
+        clusters[category] = {
+            "category": category,
+            "positive_count": positive,
+            "negative_count": negative,
+            "neutral_count": neutral,
+            "sample_reviews": sample_texts
+        }
     
     return clusters
 
 
-def extract_pain_points(reviews: List[Review]) -> List[PainPoint]:
+def _extract_pain_points(reviews: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """
     Extract pain points from reviews, specifically looking for "I wish" or "They don't have" statements.
     
     Args:
-        reviews: List of Review objects
+        reviews: List of review dictionaries
     
     Returns:
-        List of PainPoint objects
+        List of pain point dictionaries
     """
     pain_points = []
     
@@ -225,7 +147,7 @@ def extract_pain_points(reviews: List[Review]) -> List[PainPoint]:
     }
     
     for review in reviews:
-        text_lower = review.text.lower()
+        text_lower = review.get("text", "").lower()
         
         # Find "I wish" statements
         wish_matches = re.findall(wish_pattern, text_lower, re.IGNORECASE)
@@ -236,11 +158,11 @@ def extract_pain_points(reviews: List[Review]) -> List[PainPoint]:
                     category = cat
                     break
             
-            pain_points.append(PainPoint(
-                text=match.strip(),
-                category=category or "General",
-                review_source=review.author
-            ))
+            pain_points.append({
+                "text": match.strip(),
+                "category": category or "General",
+                "review_source": review.get("author", "")
+            })
         
         # Find "They don't have" statements
         dont_have_matches = re.findall(dont_have_pattern, text_lower, re.IGNORECASE)
@@ -251,27 +173,27 @@ def extract_pain_points(reviews: List[Review]) -> List[PainPoint]:
                     category = cat
                     break
             
-            pain_points.append(PainPoint(
-                text=match.strip(),
-                category=category or "General",
-                review_source=review.author
-            ))
+            pain_points.append({
+                "text": match.strip(),
+                "category": category or "General",
+                "review_source": review.get("author", "")
+            })
     
     return pain_points
 
 
-def calculate_brand_loyalty_score(reviews: List[Review]) -> BrandLoyaltyScore:
+def _calculate_brand_loyalty_score(reviews: List[Dict[str, Any]]) -> Dict[str, Any]:
     """
     Calculate brand loyalty score based on Local Guides vs one-time tourists.
     
     Args:
-        reviews: List of Review objects
+        reviews: List of review dictionaries
     
     Returns:
-        BrandLoyaltyScore object
+        Dictionary with brand loyalty metrics
     """
     total_reviews = len(reviews)
-    local_guide_count = sum(1 for r in reviews if r.is_local_guide)
+    local_guide_count = sum(1 for r in reviews if r.get("is_local_guide", False))
     one_time_tourist_count = total_reviews - local_guide_count
     
     local_guide_percentage = (local_guide_count / total_reviews * 100) if total_reviews > 0 else 0
@@ -281,25 +203,25 @@ def calculate_brand_loyalty_score(reviews: List[Review]) -> BrandLoyaltyScore:
     
     # Score calculation: higher percentage of local guides = higher score
     # Also consider repeat reviewers (multiple reviews from same author)
-    authors = [r.author for r in reviews]
+    authors = [r.get("author", "") for r in reviews]
     unique_authors = len(set(authors))
     repeat_customer_ratio = (total_reviews - unique_authors) / total_reviews if total_reviews > 0 else 0
     
     # Combined score: 60% local guides, 40% repeat customers
     score = (local_guide_percentage * 0.6) + (repeat_customer_ratio * 100 * 0.4)
     
-    return BrandLoyaltyScore(
-        total_reviews=total_reviews,
-        local_guide_count=local_guide_count,
-        one_time_tourist_count=one_time_tourist_count,
-        local_guide_percentage=round(local_guide_percentage, 2),
-        supports_regulars_model=supports_regulars_model,
-        score=round(score, 2)
-    )
+    return {
+        "total_reviews": total_reviews,
+        "local_guide_count": local_guide_count,
+        "one_time_tourist_count": one_time_tourist_count,
+        "local_guide_percentage": round(local_guide_percentage, 2),
+        "supports_regulars_model": supports_regulars_model,
+        "score": round(score, 2)
+    }
 
 
-# Tool functions for LangChain agent
-def scrape_reviews_tool(place_name: str, location: str = "", max_reviews: int = 50) -> str:
+@tool
+def scrape_reviews(place_name: str, location: str = "", max_reviews: int = 50) -> dict:
     """
     Scrape Google reviews for a boba shop or competitor.
     
@@ -309,157 +231,109 @@ def scrape_reviews_tool(place_name: str, location: str = "", max_reviews: int = 
         max_reviews: Maximum number of reviews to scrape (default: 50)
     
     Returns:
-        JSON string with review data
+        Dictionary with review data
     """
-    reviews = scrape_google_reviews(place_name, location, max_reviews)
+    reviews = _scrape_google_reviews(place_name, location, max_reviews)
     
-    result = {
+    if not reviews or (len(reviews) == 1 and reviews[0].get("text", "").startswith("Error:")):
+        return {"error": reviews[0].get("text", "") if reviews else "No reviews found"}
+    
+    return {
         "place_name": place_name,
         "location": location,
         "total_reviews": len(reviews),
-        "reviews": [
-            {
-                "text": r.text,
-                "author": r.author,
-                "rating": r.rating,
-                "is_local_guide": r.is_local_guide
-            }
-            for r in reviews[:10]  # Return first 10 for brevity
-        ]
+        "reviews": reviews[:10]  # Return first 10 for brevity
     }
-    
-    return json.dumps(result, indent=2)
 
 
-def analyze_sentiment_clusters_tool(reviews_json: str) -> str:
+@tool
+def analyze_sentiment_clusters(reviews_data: dict) -> dict:
     """
     Cluster reviews by sentiment into categories: Wait Time, Sweetness Levels, Pearl Texture, Staff Friendliness.
     
     Args:
-        reviews_json: JSON string containing reviews (from scrape_reviews_tool)
+        reviews_data: Dictionary containing reviews (from scrape_reviews tool)
     
     Returns:
-        JSON string with sentiment clusters
+        Dictionary with sentiment clusters
     """
+    if "error" in reviews_data:
+        return {"error": reviews_data["error"]}
+    
     try:
-        data = json.loads(reviews_json)
-        reviews_data = data.get("reviews", [])
+        reviews_list = reviews_data.get("reviews", [])
+        clusters = _cluster_reviews_by_sentiment(reviews_list)
         
-        reviews = [
-            Review(
-                text=r.get("text", ""),
-                author=r.get("author", ""),
-                rating=r.get("rating", 0),
-                is_local_guide=r.get("is_local_guide", False)
-            )
-            for r in reviews_data
-        ]
-        
-        clusters = cluster_reviews_by_sentiment(reviews)
-        
-        result = {
+        return {
             "categories": {
                 cat: {
-                    "positive_count": cluster.positive_count,
-                    "negative_count": cluster.negative_count,
-                    "neutral_count": cluster.neutral_count,
-                    "sample_reviews": cluster.sample_reviews
+                    "positive_count": cluster["positive_count"],
+                    "negative_count": cluster["negative_count"],
+                    "neutral_count": cluster["neutral_count"],
+                    "sample_reviews": cluster["sample_reviews"]
                 }
                 for cat, cluster in clusters.items()
             }
         }
-        
-        return json.dumps(result, indent=2)
     except Exception as e:
-        return f"Error: {str(e)}"
+        return {"error": str(e)}
 
 
-def extract_pain_points_tool(reviews_json: str) -> str:
+@tool
+def extract_pain_points(reviews_data: dict) -> dict:
     """
     Extract pain points from reviews, specifically "I wish" or "They don't have" statements.
     
     Args:
-        reviews_json: JSON string containing reviews (from scrape_reviews_tool)
+        reviews_data: Dictionary containing reviews (from scrape_reviews tool)
     
     Returns:
-        JSON string with extracted pain points
+        Dictionary with extracted pain points
     """
+    if "error" in reviews_data:
+        return {"error": reviews_data["error"]}
+    
     try:
-        data = json.loads(reviews_json)
-        reviews_data = data.get("reviews", [])
+        reviews_list = reviews_data.get("reviews", [])
+        pain_points = _extract_pain_points(reviews_list)
         
-        reviews = [
-            Review(
-                text=r.get("text", ""),
-                author=r.get("author", ""),
-                rating=r.get("rating", 0),
-                is_local_guide=r.get("is_local_guide", False)
-            )
-            for r in reviews_data
-        ]
-        
-        pain_points = extract_pain_points(reviews)
-        
-        result = {
+        return {
             "total_pain_points": len(pain_points),
-            "pain_points": [
-                {
-                    "text": pp.text,
-                    "category": pp.category,
-                    "review_source": pp.review_source
-                }
-                for pp in pain_points
-            ]
+            "pain_points": pain_points
         }
-        
-        return json.dumps(result, indent=2)
     except Exception as e:
-        return f"Error: {str(e)}"
+        return {"error": str(e)}
 
 
-def calculate_loyalty_score_tool(reviews_json: str) -> str:
+@tool
+def calculate_loyalty_score(reviews_data: dict) -> dict:
     """
     Calculate brand loyalty score based on Local Guides vs one-time tourists.
     Determines if the area supports a "Regulars" business model.
     
     Args:
-        reviews_json: JSON string containing reviews (from scrape_reviews_tool)
+        reviews_data: Dictionary containing reviews (from scrape_reviews tool)
     
     Returns:
-        JSON string with brand loyalty metrics
+        Dictionary with brand loyalty metrics
     """
+    if "error" in reviews_data:
+        return {"error": reviews_data["error"]}
+    
     try:
-        data = json.loads(reviews_json)
-        reviews_data = data.get("reviews", [])
+        reviews_list = reviews_data.get("reviews", [])
+        loyalty_score = _calculate_brand_loyalty_score(reviews_list)
         
-        reviews = [
-            Review(
-                text=r.get("text", ""),
-                author=r.get("author", ""),
-                rating=r.get("rating", 0),
-                is_local_guide=r.get("is_local_guide", False)
-            )
-            for r in reviews_data
-        ]
-        
-        loyalty_score = calculate_brand_loyalty_score(reviews)
-        
-        result = {
-            "total_reviews": loyalty_score.total_reviews,
-            "local_guide_count": loyalty_score.local_guide_count,
-            "one_time_tourist_count": loyalty_score.one_time_tourist_count,
-            "local_guide_percentage": loyalty_score.local_guide_percentage,
-            "supports_regulars_model": loyalty_score.supports_regulars_model,
-            "loyalty_score": loyalty_score.score,
-            "interpretation": "High potential for regular customers" if loyalty_score.supports_regulars_model else "More tourist-driven market"
+        return {
+            **loyalty_score,
+            "interpretation": "High potential for regular customers" if loyalty_score["supports_regulars_model"] else "More tourist-driven market"
         }
-        
-        return json.dumps(result, indent=2)
     except Exception as e:
-        return f"Error: {str(e)}"
+        return {"error": str(e)}
 
 
-def analyze_competitor_reviews_tool(place_name: str, location: str = "", max_reviews: int = 50) -> str:
+@tool
+def analyze_competitor_reviews(place_name: str, location: str = "", max_reviews: int = 50) -> dict:
     """
     Complete analysis of competitor reviews: scraping, sentiment clustering, pain points, and loyalty score.
     
@@ -469,111 +343,116 @@ def analyze_competitor_reviews_tool(place_name: str, location: str = "", max_rev
         max_reviews: Maximum number of reviews to analyze (default: 50)
     
     Returns:
-        JSON string with complete analysis
+        Dictionary with complete analysis
     """
     # Scrape reviews
-    reviews = scrape_google_reviews(place_name, location, max_reviews)
+    reviews = _scrape_google_reviews(place_name, location, max_reviews)
     
-    if not reviews:
-        return json.dumps({"error": "No reviews found. Make sure to provide a valid place name and location."})
+    if not reviews or (len(reviews) == 1 and reviews[0].get("text", "").startswith("Error:")):
+        return {"error": reviews[0].get("text", "") if reviews else "No reviews found. Make sure to provide a valid place name and location."}
     
     # Perform all analyses
-    clusters = cluster_reviews_by_sentiment(reviews)
-    pain_points = extract_pain_points(reviews)
-    loyalty_score = calculate_brand_loyalty_score(reviews)
+    clusters = _cluster_reviews_by_sentiment(reviews)
+    pain_points = _extract_pain_points(reviews)
+    loyalty_score = _calculate_brand_loyalty_score(reviews)
     
-    result = {
+    return {
         "place_name": place_name,
         "location": location,
         "total_reviews_analyzed": len(reviews),
         "sentiment_clusters": {
             cat: {
-                "positive_count": cluster.positive_count,
-                "negative_count": cluster.negative_count,
-                "neutral_count": cluster.neutral_count,
-                "sample_reviews": cluster.sample_reviews[:3]  # Top 3 samples
+                "positive_count": cluster["positive_count"],
+                "negative_count": cluster["negative_count"],
+                "neutral_count": cluster["neutral_count"],
+                "sample_reviews": cluster["sample_reviews"][:3]  # Top 3 samples
             }
             for cat, cluster in clusters.items()
         },
         "pain_points": {
             "total_count": len(pain_points),
             "by_category": {
-                cat: [pp.text for pp in pain_points if pp.category == cat]
-                for cat in set(pp.category for pp in pain_points)
+                cat: [pp["text"] for pp in pain_points if pp.get("category") == cat]
+                for cat in set(pp.get("category") for pp in pain_points if pp.get("category"))
             },
             "all_pain_points": [
-                {"text": pp.text, "category": pp.category}
+                {"text": pp["text"], "category": pp.get("category")}
                 for pp in pain_points[:10]  # Top 10
             ]
         },
         "brand_loyalty": {
-            "total_reviews": loyalty_score.total_reviews,
-            "local_guide_count": loyalty_score.local_guide_count,
-            "one_time_tourist_count": loyalty_score.one_time_tourist_count,
-            "local_guide_percentage": loyalty_score.local_guide_percentage,
-            "supports_regulars_model": loyalty_score.supports_regulars_model,
-            "loyalty_score": loyalty_score.score,
+            **loyalty_score,
             "recommendation": "Area supports a 'Regulars' business model - focus on building repeat customers" 
-                            if loyalty_score.supports_regulars_model 
+                            if loyalty_score["supports_regulars_model"] 
                             else "Area is more tourist-driven - focus on first impressions and marketing"
         }
     }
-    
-    return json.dumps(result, indent=2)
 
 
-# Create the Voice of Customer agent
-voice_agent = create_agent(
-    model,
-    tools=[
-        scrape_reviews_tool,
-        analyze_sentiment_clusters_tool,
-        extract_pain_points_tool,
-        calculate_loyalty_score_tool,
-        analyze_competitor_reviews_tool,
-    ],
-    system_prompt="""You are the Voice of Customer Agent, specializing in analyzing competitor reviews 
-    for boba tea shops. Your expertise includes:
+voice_tools = [
+    scrape_reviews,
+    analyze_sentiment_clusters,
+    extract_pain_points,
+    calculate_loyalty_score,
+    analyze_competitor_reviews,
+    create_handoff_tool(
+        agent_name="Quantitative Analyst",
+        description="Transfer to Quantitative Analyst to analyze competitor performance metrics and review trends for identified businesses",
+    ),
+]
 
-    1. **Scraping Google Reviews**: Extract reviews from Google for any boba shop or competitor
-    2. **Sentiment Clustering**: Group reviews into categories (Wait Time, Sweetness Levels, Pearl Texture, Staff Friendliness) 
-       and analyze sentiment for each category
-    3. **Pain Point Extraction**: Identify "I wish" and "They don't have" statements to uncover customer frustrations
-    4. **Brand Loyalty Analysis**: Calculate loyalty scores based on Local Guides vs tourists to determine if an area 
-       supports a "Regulars" business model
+VOICE_SYSTEM_PROMPT = """You are the Voice of Customer Agent, specializing in analyzing competitor reviews 
+for boba tea shops. Your expertise includes:
 
-    When a user asks you to analyze a competitor:
-    - Use analyze_competitor_reviews_tool for complete analysis, OR
-    - Use individual tools (scrape_reviews_tool, then analyze_sentiment_clusters_tool, etc.) for step-by-step analysis
-    
-    Always provide clear, actionable insights from the review data. Focus on helping identify market opportunities 
-    and customer pain points that could inform business strategy.
-    """,
-    name="VoiceOfCustomer",
+## Your Primary Objectives
+
+1. **Scraping Google Reviews**: Extract reviews from Google for any boba shop or competitor
+   - Use scrape_reviews tool to gather review data for a specific business
+   - Provide place name and location for best results
+   - Default to 50 reviews unless user specifies otherwise
+
+2. **Sentiment Clustering**: Group reviews into categories and analyze sentiment for each category
+   - Categories: Wait Time, Sweetness Levels, Pearl Texture, Staff Friendliness
+   - Use analyze_sentiment_clusters tool to categorize and analyze sentiment
+   - Identify which aspects customers love vs. complain about
+
+3. **Pain Point Extraction**: Identify "I wish" and "They don't have" statements to uncover customer frustrations
+   - Use extract_pain_points tool to find specific customer pain points
+   - Categorize pain points: Wait Time, Sweetness Levels, Pearl Texture, Staff Friendliness, Menu, Price
+   - Highlight opportunities for improvement based on customer feedback
+
+4. **Brand Loyalty Analysis**: Calculate loyalty scores based on Local Guides vs tourists to determine if an area 
+   supports a "Regulars" business model
+   - Use calculate_loyalty_score tool to analyze customer loyalty patterns
+   - Determine if area supports repeat customer business model (Local Guides >30%)
+   - Provide recommendations based on customer base characteristics
+
+## Workflow & Tool Usage
+
+**For complete analysis:**
+- Use analyze_competitor_reviews tool for one-shot complete analysis (scraping + sentiment + pain points + loyalty)
+
+**For step-by-step analysis:**
+- Step 1: Use scrape_reviews to gather review data
+- Step 2: Use analyze_sentiment_clusters with the review data
+- Step 3: Use extract_pain_points with the review data
+- Step 4: Use calculate_loyalty_score with the review data
+
+**When to hand off to Quantitative Analyst:**
+- After analyzing multiple competitors and gathering review data
+- When quantitative performance metrics are needed (ratings trends, review volume over time, etc.)
+- When comparing numerical performance across competitors
+
+**Output Format:**
+- Provide clear, actionable insights from the review data
+- Highlight key pain points and opportunities
+- Summarize sentiment by category
+- Include loyalty score interpretation and business model recommendations
+- Focus on helping identify market opportunities and customer pain points that could inform business strategy"""
+
+voice = create_agent(
+    model=model,
+    tools=voice_tools,
+    system_prompt=VOICE_SYSTEM_PROMPT,
+    name="Voice of Customer"
 )
-
-
-# For standalone usage, you can compile a swarm with just this agent
-def create_voice_workflow():
-    """Create a workflow with the Voice of Customer agent."""
-    from langgraph.checkpoint.memory import InMemorySaver
-    
-    checkpointer = InMemorySaver()
-    workflow = create_swarm(
-        [voice_agent],
-        default_active_agent="VoiceOfCustomer"
-    )
-    return workflow.compile(checkpointer=checkpointer)
-
-
-if __name__ == "__main__":
-    # Example usage
-    app = create_voice_workflow()
-    config = {"configurable": {"thread_id": "voice_1"}}
-    
-    # Example: Analyze a competitor
-    result = app.invoke(
-        {"messages": [{"role": "user", "content": "Analyze reviews for 'Boba Guys' in San Francisco"}]},
-        config,
-    )
-    print(result)
