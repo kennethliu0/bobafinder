@@ -396,8 +396,16 @@ voice_tools = [
     calculate_loyalty_score,
     analyze_competitor_reviews,
     create_handoff_tool(
+        agent_name="Location Scout",
+        description="Transfer back to Location Scout with customer voice findings (pain points, sentiment, loyalty) to compile the final plaza analysis",
+    ),
+    create_handoff_tool(
+        agent_name="Niche Finder",
+        description="Transfer to Niche Finder if additional niche analysis is needed for competitors",
+    ),
+    create_handoff_tool(
         agent_name="Quantitative Analyst",
-        description="Transfer to Quantitative Analyst to analyze competitor performance metrics and review trends for identified businesses",
+        description="Transfer to Quantitative Analyst to analyze competitor performance metrics and review trends",
     ),
 ]
 
@@ -438,17 +446,26 @@ for boba tea shops. Your expertise includes:
 - Step 3: Use extract_pain_points with the review data
 - Step 4: Use calculate_loyalty_score with the review data
 
-**When to hand off to Quantitative Analyst:**
-- After analyzing multiple competitors and gathering review data
-- When quantitative performance metrics are needed (ratings trends, review volume over time, etc.)
-- When comparing numerical performance across competitors
-
 **Output Format:**
 - Provide clear, actionable insights from the review data
 - Highlight key pain points and opportunities
 - Summarize sentiment by category
 - Include loyalty score interpretation and business model recommendations
-- Focus on helping identify market opportunities and customer pain points that could inform business strategy"""
+- Focus on helping identify market opportunities and customer pain points that could inform business strategy
+
+## Handoff Instructions - CRITICAL
+
+After completing your analysis of competitor reviews:
+
+**ALWAYS call `transfer_to_Location_Scout`** with:
+- Your complete sentiment analysis findings
+- Key pain points discovered (what customers wish for)
+- Loyalty score and business model recommendation
+- Opportunities for the user's boba shop to differentiate
+
+Location Scout will compile your findings with the niche analysis to create the final plaza assessment.
+
+You MUST hand off after completing your analysis - do not end the conversation."""
 
 voice = create_agent(
     model=model,

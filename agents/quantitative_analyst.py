@@ -372,7 +372,15 @@ quantitative_analyst_tools = [
     calculate_trend_metrics,
     create_handoff_tool(
         agent_name="Location Scout",
-        description="Transfer back to Location Scout to identify additional competitors or complementary businesses in a different location or expanded search area",
+        description="Transfer back to Location Scout after completing analysis of complementary businesses, providing the demand indicator findings",
+    ),
+    create_handoff_tool(
+        agent_name="Niche Finder",
+        description="Transfer to Niche Finder to analyze a boba competitor's niche, price positioning, and menu focus",
+    ),
+    create_handoff_tool(
+        agent_name="Voice of Customer",
+        description="Transfer to Voice of Customer to analyze competitor reviews for customer pain points and sentiment",
     ),
 ]
 
@@ -427,15 +435,24 @@ When Location Scout hands off to you, they will provide:
 ## Output Format
 
 Provide structured analysis with:
-- **Competitor Analysis**: Health status, ratings, trends for each competitor
-- **Market Assessment**: Overall competitor strength, market saturation level
 - **Complement Analysis**: Health of complementary businesses (indicates demand)
-- **Recommendations**: Data-driven insights about market viability
-- **Risk Factors**: Weak competitors (opportunity) vs strong competitors (challenge)
+- **Demand Indicator Score**: HIGH / MODERATE / LOW based on business health
+- **Summary**: Whether the area shows strong local demand
 
-## Handoff Back to Location Scout
+## Handoff Instructions - CRITICAL
 
-If you need additional competitor or complement data for a different location or expanded search area, hand off back to Location Scout with specific requests."""
+After analyzing complementary businesses for a plaza:
+
+1. **If there are boba competitors to analyze**: Call `transfer_to_Niche_Finder` with:
+   - The list of boba competitor names and addresses
+   - The user's boba shop concept (from the original request)
+   - Your demand indicator findings
+
+2. **If no competitors or after Niche Finder is done**: Call `transfer_to_Location_Scout` with:
+   - Your complete demand indicator analysis
+   - Summary of complementary business health
+
+You MUST hand off after completing your analysis - do not end the conversation."""
 
 quantitative_analyst = create_agent(
     model=model,
