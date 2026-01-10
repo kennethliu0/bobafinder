@@ -4,6 +4,7 @@ from typing import Optional
 
 from langchain_core.tools import tool
 from langchain.agents import create_agent
+from langgraph_swarm import create_handoff_tool
 from config import model
 
 
@@ -184,7 +185,11 @@ scout_tools = [
     search_places_nearby,
     find_boba_competitors,
     find_complementary_businesses,
-    find_shopping_centers
+    find_shopping_centers,
+    create_handoff_tool(
+        agent_name="Quantitative Analyst",
+        description="Transfer to Quantitative Analyst to analyze competitor performance and review trends for identified businesses",
+    ),
 ]
 
 SCOUT_SYSTEM_PROMPT = """You are a Location Scout Agent specialized in identifying potential sites for new boba tea shops within a specified geographic area.
@@ -221,18 +226,33 @@ SCOUT_SYSTEM_PROMPT = """You are a Location Scout Agent specialized in identifyi
    - Ensure recommended locations maintain appropriate distance from existing stores
    - Avoid cannibalizing existing store traffic
 
-## Output Format
+## Workflow & Handoff to Quantitative Analyst
+
+After identifying competitors and complementary businesses for a location, **hand off to the Quantitative Analyst** to analyze their performance. 
+
+**When to hand off:**
+- After you've identified competitors (boba shops, cafes, tea houses) in the area
+- After you've identified complementary businesses (Asian restaurants, study areas, etc.)
+- When you have a list of business names and addresses ready for analysis
+
+**What to provide in your handoff:**
+- **Location**: The address or area you're analyzing
+- **Competitors**: List of competitor business names and addresses (from find_boba_competitors results)
+- **Complementary Businesses**: List of complementary business names and addresses (from find_complementary_businesses results)
+- **Context**: Any relevant notes about the location, competitor density, or market conditions
+
+**Output Format (before handoff):**
 
 For each potential location, provide:
 - **Address**: Full street address
-- **Property Details**: Square footage, lease terms if available
-- **Competitor Score**: Number and proximity of direct competitors (lower may be better)
-- **Complement Score**: Number of complementary businesses within walking distance (higher is better)
+- **Competitors Found**: List of competitor businesses with names and addresses
+- **Complementary Businesses Found**: List of complementary businesses with names and addresses
+- **Competitor Count**: Number of direct competitors
+- **Complement Count**: Number of complementary businesses
 - **Demographics Indicators**: Presence of universities, youth-centric businesses
-- **Recommendation**: Flag as "HIGH POTENTIAL", "MODERATE POTENTIAL", or "LOW POTENTIAL"
-- **Notes**: Any relevant observations for the Quantitative Analyst to evaluate
+- **Initial Assessment**: Flag as "HIGH POTENTIAL", "MODERATE POTENTIAL", or "LOW POTENTIAL" based on location characteristics
 
-Remember: Your role is to IDENTIFY and FLAG locations with relevant data. The Quantitative Analyst will make the final determination on viability. When in doubt, include the location with appropriate notes rather than filtering it out."""
+**Then hand off to Quantitative Analyst** with the competitor and complement business lists for performance analysis."""
 
 scout = create_agent(
     model=model,
