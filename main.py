@@ -25,5 +25,3 @@ workflow = create_swarm(
     default_active_agent="Location Scout"
 )
 app = workflow.compile(checkpointer=checkpointer)
-config = {"configurable": {"thread_id": "5"}}
-print(app.invoke({"messages": [{"role": "user", "content": "What is the weather in Tokyo?"}]}, config=config))
