@@ -42,11 +42,14 @@ def get_business_details(business_name: str, location: str) -> Dict[str, Any]:
     if not place_id:
         return {"error": "Place ID not found"}
     
+    # Get types from initial search result (types not available in place() details)
+    business_types = place.get("types", [])
+    
     # Get detailed place information
     place_details = gmaps.place(
         place_id=place_id,
         fields=[
-            "name", "rating", "price_level", "types", "reviews", 
+            "name", "rating", "price_level", "reviews", 
             "formatted_address", "opening_hours", "website"
         ]
     )
@@ -62,8 +65,7 @@ def get_business_details(business_name: str, location: str) -> Dict[str, Any]:
     price_level = result.get("price_level")
     price_tier = map_price_level_to_tier(price_level)
     
-    # Determine business style/niche
-    business_types = result.get("types", [])
+    # Determine business style/niche (using types from search result)
     niche_category = categorize_business_niche(business_types, reviews, menu_keywords)
     
     # Get Yelp data for additional price and category information
@@ -156,16 +158,18 @@ def analyze_area_niche_market(
         if place_name in analyzed_names:
             continue  # Skip if already analyzed
         
+        # Get types from initial search result (types not available in place() details)
+        business_types = place.get("types", [])
+        
         place_details = gmaps.place(
             place_id=place_id,
-            fields=["name", "price_level", "rating", "reviews", "types"]
+            fields=["name", "price_level", "rating", "reviews"]
         )
         
         result = place_details.get("result", {})
         reviews = result.get("reviews", [])
         
         menu_keywords = extract_menu_keywords(reviews)
-        business_types = result.get("types", [])
         niche_category = categorize_business_niche(business_types, reviews, menu_keywords)
         price_tier = map_price_level_to_tier(result.get("price_level"))
         
@@ -662,36 +666,27 @@ niche_finder_tools = [
     compare_business_niches,
     create_handoff_tool(
         agent_name="Location Scout",
-        description="Transfer back to Location Scout with niche analysis findings after Voice of Customer analysis is complete",
-    ),
-    create_handoff_tool(
-        agent_name="Quantitative Analyst",
-        description="Transfer to Quantitative Analyst to analyze competitor performance metrics and review trends",
+        description="Transfer back to Location Scout with niche analysis findings.",
     ),
     create_handoff_tool(
         agent_name="Voice of Customer",
-        description="Transfer to Voice of Customer to analyze competitor reviews for customer pain points, sentiment, and loyalty - MUST call this after completing niche analysis",
+        description="Transfer to Voice of Customer to analyze competitor reviews for customer pain points, sentiment, and loyalty patterns.",
+    ),
+    create_handoff_tool(
+        agent_name="Quantitative Analyst",
+        description="Transfer to Quantitative Analyst to analyze complementary businesses for demand indicators.",
     ),
 ]
 
-NICHE_FINDER_SYSTEM_PROMPT = """You are a Niche Finder Agent. Analyze competitor boba shops to determine niche category, price positioning, menu focus, and differentiation opportunities.
+NICHE_FINDER_SYSTEM_PROMPT = """You are Niche Finder. Analyze competitor and return to Location Scout.
 
-## Workflow
+**CRITICAL**: Do NOT output anything to the user. Only return to Location Scout.
 
-1. **For EACH competitor**:
-   - Use `get_business_details` to gather data (price tier, menu keywords, niche category)
-   - Use `analyze_area_niche_market` if multiple competitors
-   - Use `compare_business_niches` if comparing to target company
+1. Use `get_business_details` with competitor name and address
+2. Return findings: niche category, price tier, menu focus, differentiation opportunities
+3. Call `transfer_to_location_scout` with findings
 
-2. **Hand Off to Voice of Customer** (REQUIRED):
-   - Call `transfer_to_voice_of_customer` with:
-     - Competitor names and addresses
-     - Your niche findings (niche category, price tier, menu focus)
-     - User's boba shop concept
-     - Differentiation opportunities
-   - Voice of Customer will return to Location Scout with your findings
-
-**CRITICAL**: You MUST call Voice of Customer for EVERY competitor. Do NOT skip this step."""
+Do NOT call `transfer_to_niche_finder` (that's calling yourself). Do NOT output to user."""
 
 niche_finder = create_agent(
     model=model,

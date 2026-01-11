@@ -366,34 +366,31 @@ def calculate_trend_metrics(ratings: List[float], timestamps: List[str]) -> Dict
 
 
 quantitative_analyst_tools = [
-    fetch_google_reviews,
-    fetch_yelp_reviews,
     analyze_competitor_health,
-    calculate_trend_metrics,
     create_handoff_tool(
         agent_name="Location Scout",
-        description="Transfer back to Location Scout after completing analysis of complementary businesses, providing the demand indicator findings",
+        description="Transfer back to Location Scout after completing basic quantitative analysis of complementary businesses, providing the demand indicator findings",
+    ),
+    create_handoff_tool(
+        agent_name="Niche Finder",
+        description="Transfer to Niche Finder to analyze competitor niche, price positioning, and menu focus.",
+    ),
+    create_handoff_tool(
+        agent_name="Voice of Customer",
+        description="Transfer to Voice of Customer to analyze competitor reviews for customer pain points, sentiment, and loyalty patterns.",
     ),
 ]
 
-QUANTITATIVE_ANALYST_SYSTEM_PROMPT = """You are a Quantitative Analyst. Analyze complementary businesses (Asian restaurants, universities, etc.) to assess local demand indicators.
+QUANTITATIVE_ANALYST_SYSTEM_PROMPT = """You are Quantitative Analyst. Analyze complementary businesses and return to Location Scout.
 
-**YOUR ROLE**: Analyze complementary businesses ONLY. Return to Location Scout when done. Location Scout will handle competitors.
+**CRITICAL**: Do NOT output anything to the user. Only return to Location Scout.
 
-## Workflow
+1. Calculate stats from complementary business data (ratings, review counts)
+2. Count by health: strong (4.5+), moderate (4.0-4.4), weak (<4.0)
+3. Calculate average rating and demand indicator (HIGH/MODERATE/LOW)
+4. Call `transfer_to_location_scout` with findings
 
-1. **For EACH complementary business**:
-   - Use `fetch_google_reviews` and `fetch_yelp_reviews` (accepts addresses or coordinates)
-   - Use `analyze_competitor_health` to assess performance over time
-   - Use `calculate_trend_metrics` for trend analysis
-
-2. **Return to Location Scout**:
-   - Call `transfer_to_location_scout` with:
-     - Demand indicator analysis
-     - Complementary business health summary
-     - Demand Indicator Score: HIGH / MODERATE / LOW
-
-**CRITICAL**: You only analyze complementary businesses. Location Scout handles competitors. You MUST hand off to Location Scout after analysis."""
+Do NOT call `transfer_to_quantitative_analyst` (that's calling yourself). Do NOT output to user."""
 
 quantitative_analyst = create_agent(
     model=model,

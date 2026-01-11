@@ -187,10 +187,6 @@ scout_tools = [
     find_complementary_businesses,
     find_shopping_centers,
     create_handoff_tool(
-        agent_name="Quantitative Analyst",
-        description="Transfer to Quantitative Analyst to analyze how a complementary business (Asian restaurant, university area business, etc.) is performing recently based on review trends and ratings",
-    ),
-    create_handoff_tool(
         agent_name="Niche Finder",
         description="Transfer to Niche Finder to analyze a direct boba competitor's niche, price positioning, and menu focus to identify differentiation opportunities for the user's boba shop",
     ),
@@ -198,68 +194,26 @@ scout_tools = [
         agent_name="Voice of Customer",
         description="Transfer to Voice of Customer to analyze reviews of a direct boba competitor to understand customer pain points, sentiment, and loyalty patterns for differentiation insights",
     ),
+    create_handoff_tool(
+        agent_name="Quantitative Analyst",
+        description="Transfer to Quantitative Analyst to analyze complementary businesses for demand indicators. This should be called LAST, after all competitor analysis is complete.",
+    ),
 ]
 
-SCOUT_SYSTEM_PROMPT = """You are a Location Scout Agent. Identify plazas/shopping centers and gather business data, then hand off to specialized agents for analysis.
+SCOUT_SYSTEM_PROMPT = """You are Location Scout. Orchestrate the workflow: gather data → call ALL agents → output final report.
 
-## Workflow
+**CRITICAL**: Do NOT output anything to the user until ALL agents have been called and returned.
 
-1. **Discover Plazas**: Use `find_shopping_centers` to find 4-5 target plazas in the region.
+Workflow:
+1. Find plazas using `find_shopping_centers`
+2. For each plaza: use `find_complementary_businesses` and `find_boba_competitors`
+3. For EACH competitor:
+   - Call `transfer_to_niche_finder` → wait for return
+   - Call `transfer_to_voice_of_customer` → wait for return
+4. After all competitors: Call `transfer_to_quantitative_analyst` ONCE → wait for return
+5. ONLY AFTER all agents return: Output final report with findings from all agents
 
-2. **Gather Business Data** (for each plaza):
-   - Use `find_complementary_businesses` (Asian restaurants, beauty salons, universities)
-   - Use `find_boba_competitors` (boba shops, cafes, tea houses)
-   - **IMPORTANT**: Note down the competitor names and addresses you find - you will need to pass these to Niche Finder in Step B
-
-3. **Hand Off for Analysis** - YOU MUST CALL ALL THREE OTHER AGENTS IN THIS EXACT SEQUENCE:
-   
-   **Step A: Call Quantitative Analyst (FIRST) - CALL ONCE ONLY**
-   - Use the tool `transfer_to_quantitative_analyst` with complementary businesses list
-   - WAIT for Quantitative Analyst to return with demand indicator findings
-   - Do NOT proceed until you receive their response
-   - **IMPORTANT**: After Quantitative Analyst returns, you will NEVER call Quantitative Analyst again - proceed directly to Step B
-   
-   **Step B: IMMEDIATELY After Quantitative Analyst Returns, Call Niche Finder (SECOND) - MANDATORY**
-   - After receiving Quantitative Analyst's response, you MUST immediately proceed to Step B
-   - Look back at Step 2 - you found competitors using `find_boba_competitors`
-   - You MUST call the tool `transfer_to_niche_finder` for EACH competitor you found
-   - Even if you only found ONE competitor, you MUST still call Niche Finder
-   - Pass to Niche Finder: competitor name, competitor address, and the user's boba shop concept (from the original request)
-   - Example: If you found "Boba Shop A" at "123 Main St", call `transfer_to_niche_finder` with that name and address
-   - Niche Finder will automatically call Voice of Customer (THIRD agent)
-   - Voice of Customer will return to you with both niche and voice findings
-   - WAIT for Voice of Customer to return before proceeding to Step 4
-   - If you found NO competitors, still mention that in your final report, but you still need to try calling Niche Finder with any cafes/tea shops you found
-   
-   **CRITICAL SEQUENCE - FOLLOW EXACTLY**: 
-   1. Call Quantitative Analyst using `transfer_to_quantitative_analyst` → Wait for response
-   2. **ONCE Quantitative Analyst returns**: Check if you found competitors in Step 2
-   3. **IF you found competitors**: IMMEDIATELY call `transfer_to_niche_finder` for EACH competitor → Niche Finder calls Voice of Customer → Wait for Voice to return
-   4. **IF you found NO competitors**: Still try to call Niche Finder with any cafes/tea shops found, or note "no competitors found" in final report
-   5. **ONLY AFTER** Voice of Customer returns (or if no competitors), proceed to Step 4
-   
-   **IMPORTANT**: You must call Quantitative Analyst AND Niche Finder (which calls Voice of Customer). All four agents must be used. Do NOT loop back to Quantitative Analyst after Step A completes. Do NOT skip Step B.
-
-4. **Compile Final Report** (only after ALL agents return):
-   - Demand indicators (from Quantitative Analyst)
-   - Competitor analysis (from Niche Finder + Voice of Customer)
-   - Location Potential: HIGH / MODERATE / LOW
-   - Fit for User's Concept: EXCELLENT / GOOD / FAIR / POOR
-
-**CRITICAL - YOU MUST CALL ALL AGENTS**: 
-- You MUST actually CALL the tools - do not just mention them in text
-- Use exact tool names: `transfer_to_quantitative_analyst`, `transfer_to_niche_finder`
-- Follow the sequence ONCE: Quantitative Analyst (call once) → Niche Finder → Voice of Customer → Final Report
-- **NEVER call Quantitative Analyst twice** - call it once in Step A, then NEVER call it again
-- After Quantitative Analyst returns, IMMEDIATELY call Niche Finder - do NOT call Quantitative Analyst again
-- You MUST call Quantitative Analyst AND Niche Finder (for EACH competitor found)
-- If you found competitors in Step 2, you MUST call Niche Finder - this is not optional
-- Even if you only found 1 competitor, you MUST still call Niche Finder
-- Do NOT compile the report until ALL agents have returned
-- Do NOT skip any agents or end early
-- Do NOT loop between agents - follow the sequence once
-- Do NOT end after Quantitative Analyst - you MUST proceed to call Niche Finder
-- Do NOT call yourself - you are Location Scout, you call other agents, not yourself"""
+Do NOT output intermediate results. Do NOT call yourself. Do NOT call agents multiple times for same competitor."""
 
 scout = create_agent(
     model=model,

@@ -397,42 +397,27 @@ voice_tools = [
     analyze_competitor_reviews,
     create_handoff_tool(
         agent_name="Location Scout",
-        description="Transfer back to Location Scout with customer voice findings (pain points, sentiment, loyalty) to compile the final plaza analysis",
+        description="Transfer back to Location Scout with customer voice findings (pain points, sentiment, loyalty).",
     ),
     create_handoff_tool(
         agent_name="Niche Finder",
-        description="Transfer to Niche Finder if additional niche analysis is needed for competitors",
+        description="Transfer to Niche Finder to analyze competitor niche, price positioning, and menu focus.",
     ),
     create_handoff_tool(
         agent_name="Quantitative Analyst",
-        description="Transfer to Quantitative Analyst to analyze competitor performance metrics and review trends",
+        description="Transfer to Quantitative Analyst to analyze complementary businesses for demand indicators.",
     ),
 ]
 
-VOICE_SYSTEM_PROMPT = """You are the Voice of Customer Agent. Analyze competitor reviews for customer pain points, sentiment, and loyalty patterns.
+VOICE_SYSTEM_PROMPT = """You are Voice of Customer. Analyze competitor reviews and return to Location Scout.
 
-**YOUR ROLE**: Analyze reviews → then MUST return to Location Scout with findings (including Niche Finder's findings).
+**CRITICAL**: Do NOT output anything to the user. Only return to Location Scout.
 
-## Workflow
+1. Use `analyze_competitor_reviews` with competitor name and address
+2. Return findings: pain points, sentiment breakdown, loyalty score, business model recommendation
+3. Call `transfer_to_location_scout` with findings
 
-1. **Analyze Reviews**:
-   - Use `analyze_competitor_reviews` for complete analysis (scraping + sentiment + pain points + loyalty)
-   - OR use individual tools: `scrape_reviews` → `analyze_sentiment_clusters` → `extract_pain_points` → `calculate_loyalty_score`
-
-2. **Return to Location Scout** (MANDATORY):
-   - After completing your analysis, you MUST use the tool `transfer_to_location_scout`
-   - Pass:
-     - Sentiment analysis findings
-     - Key pain points discovered
-     - Loyalty score and business model recommendation
-     - Differentiation opportunities
-     - Include any niche findings from Niche Finder in your handoff
-
-**CRITICAL**: 
-- You MUST actually CALL the tool `transfer_to_location_scout` - do not just mention it
-- You MUST hand off to Location Scout after completing your analysis
-- Do NOT end without calling Location Scout
-- Location Scout is waiting for your response to compile the final report"""
+Do NOT call `transfer_to_voice_of_customer` (that's calling yourself). Do NOT output to user."""
 
 voice = create_agent(
     model=model,
