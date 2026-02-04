@@ -1,6 +1,7 @@
 # BobaFinder
 
-An AI-powered location intelligence system for analyzing and identifying optimal locations for boba tea shops. BobaFinder uses a multi-agent AI system to perform comprehensive market analysis by evaluating competitors, customer sentiment, demand indicators, and market positioning.
+An AI-powered location intelligence system for analyzing and identifying optimal locations for boba tea shops. BobaFinder uses a multi-agent AI system to perform comprehensive market analysis by evaluating competitors, customer sentiment, demand indicators, and market positioning.<br>
+Project submission for [Agentic Orchestration and Collaboration Hackathon](https://cerebralvalley.ai/e/agentic-orchestration-hackathon)
 
 ## Overview
 
